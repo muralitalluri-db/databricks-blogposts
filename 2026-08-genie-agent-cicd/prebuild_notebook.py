@@ -116,11 +116,13 @@ else:
     catalog, schema = resolve_variables(target)
     os.makedirs(BUILD, exist_ok=True)
 
-    # Substitute tpcds_retail.geniespace.json -> build/
-    genie_src = open(os.path.join(SRC, "tpcds_retail.geniespace.json")).read()
-    genie_out = substitute(genie_src, catalog, schema)
-    with open(os.path.join(BUILD, "tpcds_retail.geniespace.json"), "w") as f:
-        f.write(genie_out)
+    # Substitute all *.json files in src/ -> build/
+    for fname in os.listdir(SRC):
+        if not fname.endswith(".json"):
+            continue
+        src_text = open(os.path.join(SRC, fname)).read()
+        with open(os.path.join(BUILD, fname), "w") as f:
+            f.write(substitute(src_text, catalog, schema))
 
     # Write target marker for deploy-time verification
     with open(MARKER, "w") as f:

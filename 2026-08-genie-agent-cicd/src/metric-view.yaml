@@ -1,22 +1,82 @@
 version: 1.1
 
-source: ${catalog}.${schema}.tpcds_all_sales
+comment: |-
+  All-channel TPC-DS retail sales at sale-line grain.
+  UNION ALL normalizes store_sales, catalog_sales, and web_sales to shared
+  column names and roles; date_dim and item join many-to-one to the union.
+  Date role: sold date (not ship date).
+  Customer role: purchasing (billing) customer.
+  Order IDs are channel-prefixed because numeric domains overlap across channels.
 
-comment: "TPC-DS Retail Sales metrics across Store, Catalog, and Web channels. One\
-  \ row per sales line item; net_paid is revenue after discounts before tax. Date\
-  \ range 1998-2003."
+# Inline UNION ALL as the source — no pre-built base view needed.
+# Each branch is explicitly enumerated (no SELECT *) so date roles,
+# customer roles, and the grain contract are intentional and reviewable.
+source: |
+  SELECT
+    ss_item_sk                                          AS item_sk,
+    ss_sold_date_sk                                     AS sold_date_sk,
+    ss_customer_sk                                      AS customer_sk,
+    'Store'                                             AS channel,
+    CONCAT('store:', CAST(ss_ticket_number AS STRING))  AS order_id,
+    ss_quantity                                         AS quantity,
+    ss_ext_sales_price                                  AS ext_sales_price,
+    ss_ext_discount_amt                                 AS ext_discount_amt,
+    ss_net_paid                                         AS net_paid,
+    ss_net_profit                                       AS net_profit
+  FROM samples.tpcds_sf1.store_sales
+  UNION ALL
+  SELECT
+    cs_item_sk,
+    cs_sold_date_sk,
+    cs_bill_customer_sk,
+    'Catalog',
+    CONCAT('catalog:', CAST(cs_order_number AS STRING)),
+    cs_quantity,
+    cs_ext_sales_price,
+    cs_ext_discount_amt,
+    cs_net_paid,
+    cs_net_profit
+  FROM samples.tpcds_sf1.catalog_sales
+  UNION ALL
+  SELECT
+    ws_item_sk,
+    ws_sold_date_sk,
+    ws_bill_customer_sk,
+    'Web',
+    CONCAT('web:', CAST(ws_order_number AS STRING)),
+    ws_quantity,
+    ws_ext_sales_price,
+    ws_ext_discount_amt,
+    ws_net_paid,
+    ws_net_profit
+  FROM samples.tpcds_sf1.web_sales
+
+# Dimension tables join many-to-one to the normalized source.
+# rely.at_most_one_match: true tells Databricks the join is safe to evaluate
+# lazily — only the joins needed by a query are applied.
+joins:
+  - name: sold_date
+    source: samples.tpcds_sf1.date_dim
+    on: source.sold_date_sk = sold_date.d_date_sk
+    rely:
+      at_most_one_match: true
+  - name: item
+    source: samples.tpcds_sf1.item
+    on: source.item_sk = item.i_item_sk
+    rely:
+      at_most_one_match: true
 
 dimensions:
   - name: Channel
-    expr: channel
-    comment: "Sales channel: Store, Catalog, or Web (each value title-case)"
+    expr: source.channel
+    comment: "Sales channel: Store, Catalog, or Web"
     synonyms:
       - sales channel
       - division
       - segment
 
   - name: Category
-    expr: category
+    expr: item.i_category
     comment: "Product category, e.g. Electronics, Home, Books, Women, Men, Sports,\
       \ Jewelry, Music, Shoes, Children"
     synonyms:
@@ -24,18 +84,18 @@ dimensions:
       - department
 
   - name: Brand
-    expr: brand
+    expr: item.i_brand
     comment: Product brand name
 
   - name: Class
-    expr: class
+    expr: item.i_class
     comment: Product class (sub-category within a category)
     synonyms:
       - product class
       - subcategory
 
   - name: Product Name
-    expr: product_name
+    expr: item.i_product_name
     comment: Individual product name
     synonyms:
       - product
@@ -43,28 +103,28 @@ dimensions:
       - sku
 
   - name: Sale Year
-    expr: sold_year
+    expr: sold_date.d_year
     comment: Calendar year of the sale (1998-2003)
     synonyms:
       - year
       - fiscal year
 
   - name: Sale Quarter
-    expr: sold_quarter
+    expr: sold_date.d_qoy
     comment: Calendar quarter of the sale (1-4)
     synonyms:
       - quarter
       - qtr
 
   - name: Sale Month
-    expr: sold_month
+    expr: sold_date.d_moy
     comment: Calendar month number of the sale (1-12)
     synonyms:
       - month
       - mo
 
   - name: Sale Date
-    expr: sold_date
+    expr: sold_date.d_date
     comment: Calendar date of the sale
     synonyms:
       - date
@@ -73,7 +133,7 @@ dimensions:
 
 measures:
   - name: Total Sales
-    expr: SUM(net_paid)
+    expr: SUM(source.net_paid)
     comment: "Total revenue (net paid after discounts, before tax) in USD"
     synonyms:
       - revenue
@@ -83,21 +143,21 @@ measures:
       - top line
 
   - name: Gross Sales
-    expr: SUM(ext_sales_price)
+    expr: SUM(source.ext_sales_price)
     comment: "Extended sales price before discounts, in USD"
     synonyms:
       - gross revenue
       - list sales
 
   - name: Total Discount
-    expr: SUM(ext_discount_amt)
+    expr: SUM(source.ext_discount_amt)
     comment: "Total discount amount given, in USD"
     synonyms:
       - discounts
       - markdown
 
   - name: Total Profit
-    expr: SUM(net_profit)
+    expr: SUM(source.net_profit)
     comment: Total net profit in USD (can be negative on loss-making lines)
     synonyms:
       - profit
@@ -105,7 +165,7 @@ measures:
       - margin dollars
 
   - name: Units Sold
-    expr: SUM(quantity)
+    expr: SUM(source.quantity)
     comment: Total quantity of units sold
     synonyms:
       - quantity
@@ -113,15 +173,15 @@ measures:
       - volume
 
   - name: Order Count
-    expr: COUNT(DISTINCT order_number)
-    comment: Distinct number of orders/tickets
+    expr: COUNT(DISTINCT source.order_id)
+    comment: "Distinct orders (channel-prefixed IDs prevent overlap across channels)"
     synonyms:
       - orders
       - transactions
       - number of orders
 
   - name: Customer Count
-    expr: COUNT(DISTINCT customer_sk)
+    expr: COUNT(DISTINCT source.customer_sk)
     comment: Distinct number of customers who purchased
     synonyms:
       - customers
@@ -129,15 +189,15 @@ measures:
       - buyers
 
   - name: Average Order Value
-    expr: SUM(net_paid) / COUNT(DISTINCT order_number)
-    comment: Average revenue per order (AOV) in USD = Total Sales / Order Count
+    expr: MEASURE(`Total Sales`) / NULLIF(MEASURE(`Order Count`), 0)
+    comment: Average revenue per order (AOV) in USD — Total Sales / Order Count
     synonyms:
       - AOV
       - avg order value
       - average ticket
 
   - name: Profit Margin
-    expr: "SUM(net_profit) / NULLIF(SUM(net_paid), 0)"
+    expr: MEASURE(`Total Profit`) / NULLIF(MEASURE(`Total Sales`), 0)
     comment: Net profit as a fraction of total sales (0.15 = 15%)
     synonyms:
       - margin
