@@ -5,7 +5,7 @@
 # COMMAND ----------
 
 # MAGIC %sh
-# MAGIC databricks database create-database-instance <LAKEBASE_INSTANCE> --capacity CU_4 --profile <DATABRICKS_PROFILE>
+# MAGIC databricks database create-database-instance <LAKEBASE_INSTANCE> --capacity CU_2 --profile <DATABRICKS_PROFILE>
 
 # COMMAND ----------
 

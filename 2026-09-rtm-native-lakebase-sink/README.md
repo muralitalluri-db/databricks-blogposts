@@ -163,7 +163,7 @@ and update `volume_path` in the notebooks.
 ### 5. Lakebase
 
 A Lakebase (Postgres) instance for the online feature table. `create-lakebase-table.py` provisions
-one (`<LAKEBASE_INSTANCE>`, 16 CUs) and creates `feature_store.user_features` in the
+one (`<LAKEBASE_INSTANCE>`, 8 CUs) and creates `feature_store.user_features` in the
 `databricks_postgres` database. The feature pipeline writes to it via the endpoint
 `<LAKEBASE_ENDPOINT>` (`<LAKEBASE_INSTANCE>.production.primary`).
 
