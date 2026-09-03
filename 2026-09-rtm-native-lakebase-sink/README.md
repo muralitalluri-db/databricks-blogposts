@@ -7,13 +7,13 @@ computes each user's **last-6 watched** and **last-3 liked** videos with `transf
 writes one feature row per user straight into **Databricks Lakebase** (Postgres) via the **native
 Lakebase sink** — ready for **single-digit-millisecond** online serving.
 
-The point of this example is the **native Lakebase sink**: instead of hand-rolling a `ForeachWriter`
+The point of this example is the **native Lakebase sink**: instead of hand-rolling a `foreach` writer
 (manual buffering, backpressure, retries, deduplication, connection pooling, and credential refresh)
 or standing up an offline→online sync pipeline, you write computed features straight to a
 **UC-registered Lakebase table** with a single `writeStream…toTable()` call — a seamless **Unity
 Catalog ↔ Lakebase** integration. The connector handles buffering, backpressure, retries,
-deduplication, and workspace-managed authentication for you. The same sink can also target any
-PostgreSQL-compatible database via `.format("postgresql")`.
+deduplication, and workspace-managed authentication for you. If the Lakebase table isn't registered
+in Unity Catalog, you can write to the Lakebase endpoint using `.format("postgresql")`.
 
 You bring **Kafka**, **Unity Catalog**, a **Lakebase** instance, and a **DBR 18 LTS** cluster; we
 provide the **notebooks** and the **data generator / replay** path so a team can reproduce it in
@@ -79,7 +79,7 @@ One row per user, overwritten on every event via upsert — the shape a feature-
 1. How to **generate and replay** a realistic engagement stream into Kafka at ~20k events/sec.
 2. How to compute **per-user "last-N" features** with `transformWithState` using a single `ValueState`.
 3. How to write those features to a **UC-registered Lakebase table** with the **native Lakebase
-   sink** (`.toTable()`) — no `ForeachWriter`, no manual buffering or auth — so they're ready for
+   sink** (`.toTable()`) — no `foreach` writer, no manual buffering or auth — so they're ready for
    recommendation and personalization serving.
 
 ---
@@ -245,7 +245,7 @@ self.features.update((watched_list, liked_list))
 
 ### Writing to Lakebase with the native sink
 
-The whole point — no `ForeachWriter`. The pipeline writes to a **UC-registered Lakebase table** with
+The whole point — no `foreach` writer. The pipeline writes to a **UC-registered Lakebase table** with
 `.toTable()`, showcasing the seamless **Unity Catalog ↔ Lakebase** integration: the table is
 governed in Unity Catalog, and the connector handles buffering, backpressure, retries,
 deduplication, and workspace-managed authentication:
@@ -259,9 +259,8 @@ deduplication, and workspace-managed authentication:
     .toTable("<LAKEBASE_CATALOG>.feature_store.user_features"))
 ```
 
-The same native sink can also write to **any PostgreSQL-compatible database** using
-`.format("postgresql")` (with an `endpoint` + `dbtable`, e.g. a Lakebase endpoint) — included in the
-notebook — for targets that aren't UC-registered tables.
+For a Lakebase table **not** registered in Unity Catalog, use `.format("postgresql")` with the
+Lakebase `endpoint` and `dbtable` instead (included in the notebook).
 
 ### Where the features go
 
