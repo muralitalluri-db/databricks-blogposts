@@ -3,7 +3,7 @@
 # MAGIC # Generate synthetic video engagement events
 # MAGIC
 # MAGIC Generates an `engagement_events` table of video watches and likes for an online
-# MAGIC personalization feature store (last 10 watched / last 5 liked per user).
+# MAGIC personalization feature store (last 6 watched / last 3 liked per user).
 # MAGIC
 # MAGIC Target scale: **5M users, 100k videos, approximately 145M events over a 2-hour window
 # MAGIC (~20k events/sec)**. To generate less data, lower `NUM_USERS`.
@@ -180,7 +180,7 @@ print("Wrote raw engagement_events table")
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC -- Feature coverage: users with a full last-10 watched and last-5 liked
+# MAGIC -- Feature coverage: users with a full last-6 watched and last-3 liked
 # MAGIC with per_user as (
 # MAGIC   select
 # MAGIC     user_id,
@@ -193,8 +193,8 @@ print("Wrote raw engagement_events table")
 # MAGIC   count(1)                                as total_users,
 # MAGIC   round(avg(watches), 1)                  as avg_watches,
 # MAGIC   round(avg(likes), 1)                    as avg_likes,
-# MAGIC   count_if(watches >= 10)                 as users_with_10plus_watches,
-# MAGIC   count_if(likes >= 5)                    as users_with_5plus_likes
+# MAGIC   count_if(watches >= 6)                  as users_with_6plus_watches,
+# MAGIC   count_if(likes >= 3)                    as users_with_3plus_likes
 # MAGIC from per_user;
 
 # COMMAND ----------

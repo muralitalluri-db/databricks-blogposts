@@ -24,7 +24,7 @@ lakebase_instance = "<LAKEBASE_INSTANCE>"
 lakebase_schema = "feature_store"
 lakebase_table = "user_features"
 
-# Flat feature columns: last 10 watched + last 5 liked video ids (nullable).
+# Flat feature columns: last 6 watched + last 3 liked video ids (nullable).
 watched_cols = ",\n            ".join(f"watched_video_{i} VARCHAR(20)" for i in range(1, 7))
 liked_cols = ",\n            ".join(f"liked_video_{i} VARCHAR(20)" for i in range(1, 4))
 
